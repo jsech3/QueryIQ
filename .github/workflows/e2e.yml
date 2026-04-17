@@ -1,0 +1,44 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily smoke test against production at 8am PT (3pm UTC)
+    - cron: '0 15 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests (local build)
+        if: github.event_name != 'schedule'
+        run: npx playwright test
+
+      - name: Run E2E smoke tests (production)
+        if: github.event_name == 'schedule'
+        run: BASE_URL=https://queryiq.daitiq.com npx playwright test
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
